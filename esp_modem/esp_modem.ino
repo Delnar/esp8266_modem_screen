@@ -1,16 +1,31 @@
+#include <WiFi.h>
+#include <WiFiAP.h>
+#include <WiFiClient.h>
+#include <WiFiGeneric.h>
+#include <WiFiMulti.h>
+#include <WiFiSTA.h>
+#include <WiFiScan.h>
+#include <WiFiServer.h>
+#include <WiFiType.h>
+#include <WiFiUdp.h>
+
+#include <dummy.h>
+
+#include <ESPmDNS.h>
+
 /*
    WiFi SIXFOUR - A virtual WiFi modem based on the ESP 8266 chipset
    Copyright (C) 2016 Paul Rickards <rickards@gmail.com>
    Added EEPROM read/write, status/help pages, busy answering of incoming calls
-   uses the readily available Sparkfun ESP8266 WiFi Shield which has 5v level
+   uses the readily available Sparkfun ESP32 WiFi Shield which has 5v level
    shifters and 3.3v voltage regulation present-- easily connect to a C64
    https://www.sparkfun.com/products/13287
 
    based on
-   ESP8266 based virtual modem
+   ESP32 based virtual modem
    Copyright (C) 2016 Jussi Salin <salinjus@gmail.com>
 
-   https://github.com/jsalin/esp8266_modem
+   https://github.com/jsalin/esp32_modem
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -26,10 +41,9 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+#include <WebServer.h>
 #include <EEPROM.h>
-#include <ESP8266mDNS.h>
+
 
 #include <Wire.h>
 #include <U8g2lib.h>
@@ -111,6 +125,18 @@ static unsigned char ascToPetTable[256] = {
 #define BUSY_MSG_LEN    80
 #define LAST_ADDRESS    780
 
+static const uint8_t D0   = 16;
+static const uint8_t D1   = 5;
+static const uint8_t D2   = 4;
+static const uint8_t D3   = 0;
+static const uint8_t D4   = 2;
+static const uint8_t D5   = 14;
+static const uint8_t D6   = 12;
+static const uint8_t D7   = 13;
+static const uint8_t D8   = 15;
+static const uint8_t D9   = 3;
+static const uint8_t D10  = 1;
+
 #define SWITCH_PIN D3       // GPIO0 (programmind mode pin)
 #define LED_PIN D5          // Status LED
 #define DCD_PIN D6          // DCD Carrier Status
@@ -148,8 +174,17 @@ bool echo = true;
 bool autoAnswer = false;
 String ssid, password, busyMsg;
 byte ringCount = 0;
+#define R_OK 0
+#define R_CONNECT 1
+#define R_RING 2
+#define R_NOCARRIER 3
+#define R_ERROR 4
+#define R_NONE 5
+#define R_NODIALTONE 6
+#define R_BUSY 7
+#define R_NOANSWER 8
 String resultCodes[] = { "OK", "CONNECT", "RING", "NO CARRIER", "ERROR", "", "NO DIALTONE", "BUSY", "NO ANSWER" };
-enum resultCodes_t { R_OK, R_CONNECT, R_RING, R_NOCARRIER, R_ERROR, R_NONE, R_NODIALTONE, R_BUSY, R_NOANSWER };
+// enum resultCodes_t { R_OK, R_CONNECT, R_RING, R_NOCARRIER, R_ERROR, R_NONE, R_NODIALTONE, R_BUSY, R_NOANSWER };
 unsigned long connectTime = 0;
 bool petTranslate = false; // Fix PET MCTerm 1.26C Pet->ASCII encoding to actual ASCII
 bool hex = false;
@@ -169,7 +204,7 @@ unsigned long oledTimer = 0;
 
 WiFiClient tcpClient;
 WiFiServer tcpServer(tcpServerPort);
-ESP8266WebServer webServer(80);
+WebServer webServer(80);
 MDNSResponder mdns;
 
 String connectTimeString() {
@@ -604,7 +639,7 @@ void storeSpeedDial(byte num, String location) {
 void welcome() {
   Serial.println();
   Serial.println("WIFI SIXFOUR BUILD " + build + " BY @PAULRICKARDS");
-  Serial.println("BASED ON GITHUB.COM/JSALIN/ESP8266_MODEM");
+  Serial.println("BASED ON GITHUB.COM/JSALIN/ESP32_MODEM");
 }
 
 /**
@@ -693,7 +728,8 @@ void setup() {
   webServer.on("/", handleRoot);
   webServer.on("/ath", handleWebHangUp);
   webServer.begin();
-  mdns.begin("C64WiFi", WiFi.localIP());
+  // mdns.begin("C64WiFi", WiFi.localIP());
+  mdns.begin("C64WiFi");
 }
 
 String ipToString(IPAddress ip) {
@@ -1196,7 +1232,8 @@ void command()
     sendResult(R_OK);
     Serial.flush();
     delay(500);
-    ESP.reset();
+    // ESP.reset();
+    ESP.restart();
   }
 
   /**** Exit modem command mode, go online ****/
